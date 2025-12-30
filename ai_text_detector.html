@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Text Detector</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 200px;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-size: 16px;
+            font-family: inherit;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 15px;
+            margin-top: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .results {
+            margin-top: 30px;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .results.show {
+            display: block;
+            animation: slideIn 0.5s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .score-container {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .score-circle {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            margin: 0 auto 15px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-size: 36px;
+            font-weight: bold;
+            color: white;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .verdict {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .confidence {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .indicators {
+            margin-top: 20px;
+        }
+
+        .indicator {
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .indicator.detected {
+            background: #ffe5e5;
+            border-left: 4px solid #ff4444;
+        }
+
+        .indicator.clear {
+            background: #e5ffe5;
+            border-left: 4px solid #44ff44;
+        }
+
+        .indicator-label {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .indicator-value {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .char-count {
+            text-align: right;
+            margin-top: 5px;
+            font-size: 12px;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 AI Text Detector</h1>
+        <p class="subtitle">Analyze text to detect potential AI-generated content</p>
+        
+        <textarea id="textInput" placeholder="Paste your text here to analyze..."></textarea>
+        <div class="char-count" id="charCount">0 characters</div>
+        
+        <button class="btn" onclick="analyzeText()">Analyze Text</button>
+        
+        <div class="results" id="results">
+            <div class="score-container">
+                <div class="score-circle" id="scoreCircle">
+                    <div id="scoreValue">0%</div>
+                    <div style="font-size: 12px; margin-top: 5px;">AI Likelihood</div>
+                </div>
+                <div class="verdict" id="verdict"></div>
+                <div class="confidence" id="confidence"></div>
+            </div>
+            
+            <div class="indicators" id="indicators"></div>
+        </div>
+    </div>
+
+    <script>
+        const textInput = document.getElementById('textInput');
+        const charCount = document.getElementById('charCount');
+
+        textInput.addEventListener('input', function() {
+            charCount.textContent = this.value.length + ' characters';
+        });
+
+        function analyzeText() {
+            const text = textInput.value.trim();
+            
+            if (text.length < 50) {
+                alert('Please enter at least 50 characters for accurate analysis.');
+                return;
+            }
+
+            const analysis = detectAIText(text);
+            displayResults(analysis);
+        }
+
+        function detectAIText(text) {
+            let aiScore = 0;
+            const indicators = [];
+
+            // 1. Sentence length consistency
+            const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
+            const avgLength = sentences.reduce((a, b) => a + b.length, 0) / sentences.length;
+            const variance = sentences.reduce((a, b) => a + Math.pow(b.length - avgLength, 2), 0) / sentences.length;
+            
+            if (variance < 500) {
+                aiScore += 20;
+                indicators.push({detected: true, label: 'Uniform Sentence Length', value: 'Low variation detected'});
+            } else {
+                indicators.push({detected: false, label: 'Sentence Length Variation', value: 'Natural variation'});
+            }
+
+            // 2. Common AI phrases
+            const aiPhrases = [
+                'it is important to note', 'delve into', 'in conclusion', 'furthermore',
+                'additionally', 'it\'s worth noting', 'comprehensive', 'leverage',
+                'robust', 'streamline', 'optimize', 'facilitate', 'utilize'
+            ];
+            
+            let phraseCount = 0;
+            aiPhrases.forEach(phrase => {
+                if (text.toLowerCase().includes(phrase)) phraseCount++;
+            });
+            
+            if (phraseCount >= 3) {
+                aiScore += 25;
+                indicators.push({detected: true, label: 'Common AI Phrases', value: `${phraseCount} detected`});
+            } else {
+                indicators.push({detected: false, label: 'AI Phrase Usage', value: 'Minimal'});
+            }
+
+            // 3. Repetitive structure
+            const words = text.toLowerCase().split(/\s+/);
+            const uniqueWords = new Set(words);
+            const uniqueRatio = uniqueWords.size / words.length;
+            
+            if (uniqueRatio < 0.4) {
+                aiScore += 15;
+                indicators.push({detected: true, label: 'Word Repetition', value: 'High repetition detected'});
+            } else {
+                indicators.push({detected: false, label: 'Vocabulary Diversity', value: 'Good variety'});
+            }
+
+            // 4. Perfect grammar (very few errors)
+            const punctErrors = (text.match(/[a-z]\.[A-Z]/g) || []).length;
+            const spaceErrors = (text.match(/\s{2,}/g) || []).length;
+            
+            if (punctErrors === 0 && spaceErrors === 0 && text.length > 200) {
+                aiScore += 20;
+                indicators.push({detected: true, label: 'Grammar Perfection', value: 'Unusually flawless'});
+            } else {
+                indicators.push({detected: false, label: 'Natural Imperfections', value: 'Present'});
+            }
+
+            // 5. Transitional word density
+            const transitions = ['however', 'moreover', 'therefore', 'thus', 'hence', 'consequently'];
+            let transitionCount = 0;
+            transitions.forEach(word => {
+                transitionCount += (text.toLowerCase().match(new RegExp('\\b' + word + '\\b', 'g')) || []).length;
+            });
+            
+            if (transitionCount > text.split(/\s+/).length / 50) {
+                aiScore += 20;
+                indicators.push({detected: true, label: 'Excessive Transitions', value: `${transitionCount} found`});
+            } else {
+                indicators.push({detected: false, label: 'Transition Usage', value: 'Natural'});
+            }
+
+            return {
+                score: Math.min(aiScore, 100),
+                indicators: indicators
+            };
+        }
+
+        function displayResults(analysis) {
+            const results = document.getElementById('results');
+            const scoreCircle = document.getElementById('scoreCircle');
+            const scoreValue = document.getElementById('scoreValue');
+            const verdict = document.getElementById('verdict');
+            const confidence = document.getElementById('confidence');
+            const indicatorsDiv = document.getElementById('indicators');
+
+            scoreValue.textContent = analysis.score + '%';
+
+            // Color coding
+            if (analysis.score >= 70) {
+                scoreCircle.style.background = 'linear-gradient(135deg, #ff4444, #cc0000)';
+                verdict.textContent = 'Likely AI-Generated';
+                verdict.style.color = '#cc0000';
+                confidence.textContent = 'High confidence';
+            } else if (analysis.score >= 40) {
+                scoreCircle.style.background = 'linear-gradient(135deg, #ffaa00, #ff8800)';
+                verdict.textContent = 'Possibly AI-Generated';
+                verdict.style.color = '#ff8800';
+                confidence.textContent = 'Medium confidence';
+            } else {
+                scoreCircle.style.background = 'linear-gradient(135deg, #44ff44, #00cc00)';
+                verdict.textContent = 'Likely Human-Written';
+                verdict.style.color = '#00cc00';
+                confidence.textContent = 'Good confidence';
+            }
+
+            // Display indicators
+            indicatorsDiv.innerHTML = '';
+            analysis.indicators.forEach(ind => {
+                const div = document.createElement('div');
+                div.className = 'indicator ' + (ind.detected ? 'detected' : 'clear');
+                div.innerHTML = `
+                    <span class="indicator-label">${ind.label}</span>
+                    <span class="indicator-value">${ind.value}</span>
+                `;
+                indicatorsDiv.appendChild(div);
+            });
+
+            results.classList.add('show');
+        }
+    </script>
+</body>
+</html>
